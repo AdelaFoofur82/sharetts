@@ -27,7 +27,6 @@
             padding: 0.5rem;
             gap: 0.5rem;
         }
-        /* Zona de texto: ocupa todo el espacio disponible */
         .texto-scroll {
             flex: 1;
             overflow-y: auto;
@@ -46,7 +45,6 @@
             padding: 1rem;
             text-align: center;
         }
-        /* Párrafos */
         .parrafo {
             padding: 0.5rem 0.6rem;
             border-radius: 0.5rem;
@@ -62,7 +60,6 @@
         .parrafo:active {
             background-color: #333;
         }
-        /* Botones de control */
         .controles {
             flex-shrink: 0;
         }
@@ -94,21 +91,12 @@
         .textarea-manual::placeholder {
             color: #666;
         }
-        .btn-voz {
-            text-align: left;
-            font-size: 0.95rem;
-        }
-        /* Ocultar la lista de voces por defecto para no saturar */
-        .lista-voces {
-            max-height: 30vh;
-            overflow-y: auto;
-        }
     </style>
 </head>
 <body>
     <div id="app" class="app-container">
 
-        <!-- ===== ZONA DE TEXTO (ocupa todo el espacio) ===== -->
+        <!-- ===== ZONA DE TEXTO ===== -->
         <div class="texto-scroll" ref="textoScroll" v-if="hayTexto">
             <div v-for="(p, i) in parrafos" :key="i"
                  :class="['parrafo', { activo: i === parrafoActual }]"
@@ -117,7 +105,7 @@
             </div>
         </div>
 
-        <!-- Si no hay texto compartido, mostrar textarea para pegar -->
+        <!-- Si no hay texto compartido, mostrar textarea -->
         <div class="texto-scroll d-flex flex-column" v-else>
             <p class="text-muted text-center mt-3 mb-2">Comparte un texto desde otra app</p>
             <p class="text-muted text-center small mb-3">o pégalo aquí:</p>
@@ -129,12 +117,18 @@
             </button>
         </div>
 
-        <!-- ===== CONTROLES (fijos abajo) ===== -->
+        <!-- ===== CONTROLES ===== -->
         <div class="controles d-grid gap-2" v-if="hayTexto">
 
-            <!-- Fila 1: LEER/PAUSA + REINICIAR -->
+            <!-- Fila 1: ATRÁS | PAUSA/REANUDAR | ADELANTE -->
             <div class="row g-2">
-                <div class="col-8">
+                <div class="col-3">
+                    <button @click="parrafoAnterior" class="btn btn-secondary btn-control w-100"
+                            :disabled="parrafoActual <= 0">
+                        ⏮
+                    </button>
+                </div>
+                <div class="col-6">
                     <button @click="toggleLectura"
                             :class="['btn', 'btn-control', 'w-100', estaPausado ? 'btn-warning' : (estaLeyendo ? 'btn-primary' : 'btn-success')]"
                             :disabled="!hayTexto">
@@ -143,22 +137,28 @@
                         <span v-else>⏸ PAUSA</span>
                     </button>
                 </div>
-                <div class="col-4">
-                    <button @click="reiniciar" class="btn btn-danger btn-control w-100"
-                            :disabled="!hayTexto">
-                        🔄
+                <div class="col-3">
+                    <button @click="parrafoSiguiente" class="btn btn-secondary btn-control w-100"
+                            :disabled="parrafoActual >= parrafos.length - 1">
+                        ⏭
                     </button>
                 </div>
             </div>
 
-            <!-- Fila 2: VELOCIDAD -->
+            <!-- Fila 2: REINICIAR -->
+            <button @click="reiniciar" class="btn btn-danger btn-control-sm w-100 py-2"
+                    :disabled="!hayTexto">
+                🔄 REINICIAR
+            </button>
+
+            <!-- Fila 3: VELOCIDAD -->
             <div class="d-flex gap-2 align-items-stretch">
                 <button @click="cambiarVelocidad(-0.25)" class="btn btn-outline-light btn-control-sm flex-fill">−</button>
                 <div class="velocidad-display flex-fill">{{ velocidad.toFixed(2) }}×</div>
                 <button @click="cambiarVelocidad(0.25)" class="btn btn-outline-light btn-control-sm flex-fill">+</button>
             </div>
 
-            <!-- Fila 3: CAMBIO DE VOZ + IDIOMA -->
+            <!-- Fila 4: CAMBIO DE VOZ + IDIOMA -->
             <div class="row g-2">
                 <div class="col-7">
                     <button @click="ciclarVoz" class="btn btn-info btn-control-sm w-100 py-3">
@@ -184,7 +184,7 @@
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
-        const { createApp, nextTick } = Vue;
+        const { createApp } = Vue;
 
         createApp({
             data() {
@@ -196,12 +196,11 @@
                     vozSeleccionada: 0,
                     idiomaDetectado: '',
 
-                    // Estado de lectura
-                    parrafos: [],           // array de strings (párrafos)
-                    parrafoActual: 0,       // índice del párrafo que se está leyendo / resaltado
-                    estaLeyendo: false,     // true = hablando (speechSynthesis.speaking)
-                    estaPausado: false,     // true = pausado (speechSynthesis.paused)
-                    utteranceActual: null,  // referencia a la utterance en curso
+                    parrafos: [],
+                    parrafoActual: 0,
+                    estaLeyendo: false,
+                    estaPausado: false,
+                    utteranceActual: null,
                 };
             },
             computed: {
@@ -214,23 +213,19 @@
                 }
             },
             mounted() {
-                // 1. Texto compartido desde la URL
                 const params = new URLSearchParams(window.location.search);
                 const textoCompartido = params.get('text') || params.get('url') || params.get('title') || '';
                 if (textoCompartido) {
                     this.establecerTexto(textoCompartido);
                 }
 
-                // 2. Cargar voces
                 this.cargarVoces();
                 if (typeof speechSynthesis !== 'undefined') {
                     speechSynthesis.onvoiceschanged = this.cargarVoces;
                 }
 
-                // 3. Configurar Media Session para controles del coche / bluetooth
                 this.configurarMediaSession();
 
-                // 4. Registrar Service Worker
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('sw.js').catch(err => console.log('SW:', err));
                 }
@@ -239,7 +234,6 @@
                 // ========== TEXTO Y PÁRRAFOS ==========
                 establecerTexto(t) {
                     this.texto = t;
-                    // Dividir en párrafos por doble salto de línea o saltos simples
                     this.parrafos = t.split(/\n\s*\n|\n/).filter(p => p.trim().length > 0);
                     if (this.parrafos.length === 0 && t.trim()) {
                         this.parrafos = [t.trim()];
@@ -314,7 +308,6 @@
                 // ========== LECTURA ==========
                 toggleLectura() {
                     if (this.estaPausado) {
-                        // Reanudar
                         speechSynthesis.resume();
                         this.estaPausado = false;
                         this.estaLeyendo = true;
@@ -322,14 +315,12 @@
                         return;
                     }
                     if (this.estaLeyendo) {
-                        // Pausar
                         speechSynthesis.pause();
                         this.estaPausado = true;
                         this.estaLeyendo = false;
                         this.actualizarMediaSession('paused');
                         return;
                     }
-                    // Iniciar desde el párrafo actual
                     this.leerDesdeParrafo(this.parrafoActual);
                 },
                 leerDesdeParrafo(indice) {
@@ -342,7 +333,6 @@
                 },
                 hablarParrafo(indice) {
                     if (indice >= this.parrafos.length) {
-                        // Fin de la lectura
                         this.estaLeyendo = false;
                         this.estaPausado = false;
                         this.actualizarMediaSession('none');
@@ -364,8 +354,6 @@
                     };
 
                     u.onend = () => {
-                        // Pasar automáticamente al siguiente párrafo
-                        // (solo si no se ha cancelado manualmente)
                         if (this.estaLeyendo || this.estaPausado) {
                             this.hablarParrafo(indice + 1);
                         }
@@ -389,12 +377,30 @@
                     this.parrafoActual = 0;
                     this.actualizarMediaSession('none');
                 },
+
+                // ========== NAVEGACIÓN ENTRE PÁRRAFOS ==========
+                parrafoAnterior() {
+                    const nuevo = Math.max(0, this.parrafoActual - 1);
+                    if (nuevo === this.parrafoActual) return;
+                    if (this.estaLeyendo || this.estaPausado) {
+                        this.leerDesdeParrafo(nuevo);
+                    } else {
+                        this.parrafoActual = nuevo;
+                    }
+                },
+                parrafoSiguiente() {
+                    const nuevo = Math.min(this.parrafos.length - 1, this.parrafoActual + 1);
+                    if (nuevo === this.parrafoActual) return;
+                    if (this.estaLeyendo || this.estaPausado) {
+                        this.leerDesdeParrafo(nuevo);
+                    } else {
+                        this.parrafoActual = nuevo;
+                    }
+                },
                 saltarAParrafo(indice) {
-                    // Si ya está leyendo o pausado, saltar y continuar
                     if (this.estaLeyendo || this.estaPausado) {
                         this.leerDesdeParrafo(indice);
                     } else {
-                        // Solo resaltar
                         this.parrafoActual = indice;
                     }
                 },
@@ -406,30 +412,23 @@
                     if (nueva > 2.0) nueva = 2.0;
                     this.velocidad = Math.round(nueva * 100) / 100;
 
-                    // Si está leyendo, reiniciar el párrafo actual con la nueva velocidad
                     if (this.estaLeyendo && !this.estaPausado) {
                         const idx = this.parrafoActual;
                         speechSynthesis.cancel();
-                        // Pequeño delay para que el cancel se procese
                         setTimeout(() => this.hablarParrafo(idx), 50);
                     }
                 },
 
-                // ========== MEDIA SESSION (controles del coche / bluetooth) ==========
+                // ========== MEDIA SESSION ==========
                 configurarMediaSession() {
-                    if (!('mediaSession' in navigator)) {
-                        console.log('Media Session API no disponible');
-                        return;
-                    }
+                    if (!('mediaSession' in navigator)) return;
 
-                    // Metadata básica (para mostrar en pantalla del coche)
                     navigator.mediaSession.metadata = new MediaMetadata({
                         title: 'Lector en Coche',
                         artist: 'Text to Speech',
                         album: ''
                     });
 
-                    // Handler: Play / Pausa (toggle)
                     navigator.mediaSession.setActionHandler('play', () => {
                         if (this.estaPausado) {
                             this.toggleLectura();
@@ -442,19 +441,14 @@
                         if (this.estaLeyendo) this.toggleLectura();
                     });
 
-                    // Handler: Párrafo anterior
                     navigator.mediaSession.setActionHandler('previoustrack', () => {
-                        const nuevo = Math.max(0, this.parrafoActual - 1);
-                        this.leerDesdeParrafo(nuevo);
+                        this.parrafoAnterior();
                     });
 
-                    // Handler: Párrafo siguiente
                     navigator.mediaSession.setActionHandler('nexttrack', () => {
-                        const nuevo = Math.min(this.parrafos.length - 1, this.parrafoActual + 1);
-                        this.leerDesdeParrafo(nuevo);
+                        this.parrafoSiguiente();
                     });
 
-                    // Handler: Stop (detener y volver al inicio)
                     navigator.mediaSession.setActionHandler('stop', () => {
                         this.reiniciar();
                     });
