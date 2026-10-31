@@ -8,109 +8,183 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <style>
-        body {
+        html, body {
+            height: 100%;
             background-color: #121212;
             color: #fff;
             -webkit-tap-highlight-color: transparent;
-            user-select: none;
         }
-        .btn-gigante {
-            font-size: 2rem;
-            padding: 1.5rem;
-            font-weight: bold;
-            border-radius: 1rem;
+        body {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
-        .texto-compartido {
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            padding: 0.5rem;
+            gap: 0.5rem;
+        }
+        /* Zona de texto: ocupa todo el espacio disponible */
+        .texto-scroll {
+            flex: 1;
+            overflow-y: auto;
             background: #1e1e1e;
             border-radius: 0.75rem;
+            padding: 0.75rem;
+            font-size: 1.15rem;
+            line-height: 1.7;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .texto-scroll:empty::before {
+            content: "Comparte un texto desde otra app o pégalo aquí abajo.";
+            color: #666;
+            display: block;
             padding: 1rem;
-            max-height: 120px;
-            overflow-y: auto;
-            font-size: 1rem;
-            color: #ccc;
+            text-align: center;
+        }
+        /* Párrafos */
+        .parrafo {
+            padding: 0.5rem 0.6rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            transition: background-color 0.2s ease;
+            cursor: pointer;
+        }
+        .parrafo.activo {
+            background-color: #2b4a2b;
+            border-left: 4px solid #4caf50;
+            font-weight: 500;
+        }
+        .parrafo:active {
+            background-color: #333;
+        }
+        /* Botones de control */
+        .controles {
+            flex-shrink: 0;
+        }
+        .btn-control {
+            font-size: 1.6rem;
+            padding: 1rem;
+            font-weight: bold;
+            border-radius: 0.9rem;
+        }
+        .btn-control-sm {
+            font-size: 1.2rem;
+            padding: 0.7rem;
+            border-radius: 0.7rem;
         }
         .velocidad-display {
-            font-size: 2rem;
+            font-size: 1.6rem;
             font-weight: bold;
             display: flex;
             align-items: center;
             justify-content: center;
         }
-        .btn-voz {
-            text-align: left;
+        .textarea-manual {
+            background: #1e1e1e;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 0.5rem;
             font-size: 1rem;
         }
-        .sin-texto {
-            text-align: center;
-            padding: 2rem 1rem;
-            color: #888;
+        .textarea-manual::placeholder {
+            color: #666;
+        }
+        .btn-voz {
+            text-align: left;
+            font-size: 0.95rem;
+        }
+        /* Ocultar la lista de voces por defecto para no saturar */
+        .lista-voces {
+            max-height: 30vh;
+            overflow-y: auto;
         }
     </style>
 </head>
 <body>
-    <div id="app" class="container-fluid py-3" style="padding-bottom: 2rem;">
+    <div id="app" class="app-container">
 
-        <!-- Texto compartido -->
-        <div v-if="texto" class="texto-compartido mb-3">
-            {{ texto }}
-        </div>
-        <div v-else class="sin-texto mb-3">
-            <p>Comparte un texto desde otra app para empezar.</p>
-            <p class="small">O pega algo aquí:</p>
-            <textarea v-model="textoManual" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Escribe o pega un texto..."></textarea>
-            <button v-if="textoManual" @click="usarTextoManual" class="btn btn-outline-light mt-2 w-100">Usar este texto</button>
+        <!-- ===== ZONA DE TEXTO (ocupa todo el espacio) ===== -->
+        <div class="texto-scroll" ref="textoScroll" v-if="hayTexto">
+            <div v-for="(p, i) in parrafos" :key="i"
+                 :class="['parrafo', { activo: i === parrafoActual }]"
+                 @click="saltarAParrafo(i)">
+                {{ p }}
+            </div>
         </div>
 
-        <!-- Botón LEER -->
-        <button @click="leer" class="btn btn-success btn-gigante w-100 mb-3" :disabled="!texto">
-            ▶ LEER
-        </button>
+        <!-- Si no hay texto compartido, mostrar textarea para pegar -->
+        <div class="texto-scroll d-flex flex-column" v-else>
+            <p class="text-muted text-center mt-3 mb-2">Comparte un texto desde otra app</p>
+            <p class="text-muted text-center small mb-3">o pégalo aquí:</p>
+            <textarea v-model="textoManual" class="textarea-manual w-100 flex-grow-0" rows="4"
+                      placeholder="Escribe o pega un texto..."></textarea>
+            <button v-if="textoManual.trim()" @click="usarTextoManual"
+                    class="btn btn-outline-light w-100 mt-2 py-3">
+                Usar este texto
+            </button>
+        </div>
 
-        <!-- Botón PARAR -->
-        <button @click="parar" class="btn btn-danger btn-gigante w-100 mb-4">
-            ⏹ PARAR
-        </button>
+        <!-- ===== CONTROLES (fijos abajo) ===== -->
+        <div class="controles d-grid gap-2" v-if="hayTexto">
 
-        <!-- Botón CAMBIAR IDIOMA (nuevo) -->
-        <button @click="cambiarIdiomaAutomatico" class="btn btn-warning btn-gigante w-100 mb-4">
-            🌐 CAMBIAR IDIOMA
-        </button>
+            <!-- Fila 1: LEER/PAUSA + REINICIAR -->
+            <div class="row g-2">
+                <div class="col-8">
+                    <button @click="toggleLectura"
+                            :class="['btn', 'btn-control', 'w-100', estaPausado ? 'btn-warning' : (estaLeyendo ? 'btn-primary' : 'btn-success')]"
+                            :disabled="!hayTexto">
+                        <span v-if="!estaLeyendo && !estaPausado">▶ LEER</span>
+                        <span v-else-if="estaPausado">▶ REANUDAR</span>
+                        <span v-else>⏸ PAUSA</span>
+                    </button>
+                </div>
+                <div class="col-4">
+                    <button @click="reiniciar" class="btn btn-danger btn-control w-100"
+                            :disabled="!hayTexto">
+                        🔄
+                    </button>
+                </div>
+            </div>
 
-        <!-- Velocidad -->
-        <div class="mb-4">
-            <label class="form-label fs-5 fw-bold">Velocidad</label>
+            <!-- Fila 2: VELOCIDAD -->
             <div class="d-flex gap-2 align-items-stretch">
-                <button @click="cambiarVelocidad(-0.25)" class="btn btn-outline-light flex-fill py-4 fs-3">−</button>
+                <button @click="cambiarVelocidad(-0.25)" class="btn btn-outline-light btn-control-sm flex-fill">−</button>
                 <div class="velocidad-display flex-fill">{{ velocidad.toFixed(2) }}×</div>
-                <button @click="cambiarVelocidad(0.25)" class="btn btn-outline-light flex-fill py-4 fs-3">+</button>
+                <button @click="cambiarVelocidad(0.25)" class="btn btn-outline-light btn-control-sm flex-fill">+</button>
             </div>
-        </div>
 
-        <!-- Info idioma detectado -->
-        <div v-if="idiomaDetectado" class="mb-3 text-center">
-            <span class="badge bg-info text-dark fs-6">
-                Idioma detectado: {{ idiomaDetectado }}
-            </span>
-        </div>
-
-        <!-- Voces -->
-        <div class="mb-3">
-            <label class="form-label fs-5 fw-bold">Voz ({{ voces.length }})</label>
-            <div class="d-grid gap-2">
-                <button v-for="(voz, i) in voces" :key="voz.name + i"
-                        @click="seleccionarVoz(i)"
-                        :class="['btn', 'btn-voz', 'py-3', vozSeleccionada === i ? 'btn-primary' : 'btn-outline-secondary']">
-                    🔊 {{ voz.name }} <span class="badge bg-secondary">{{ voz.lang }}</span>
-                </button>
-                <p v-if="voces.length === 0" class="text-muted small">Cargando voces...</p>
+            <!-- Fila 3: CAMBIO DE VOZ + IDIOMA -->
+            <div class="row g-2">
+                <div class="col-7">
+                    <button @click="ciclarVoz" class="btn btn-info btn-control-sm w-100 py-3">
+                        🎤 CAMBIO DE VOZ
+                    </button>
+                </div>
+                <div class="col-5">
+                    <button @click="cambiarIdiomaAutomatico" class="btn btn-warning btn-control-sm w-100 py-3">
+                        🌐 IDIOMA
+                    </button>
+                </div>
             </div>
+
+            <!-- Info de voz actual + idioma detectado -->
+            <div class="text-center small text-muted">
+                <span v-if="vozActualNombre">{{ vozActualNombre }}</span>
+                <span v-if="idiomaDetectado" class="badge bg-info text-dark ms-1">{{ idiomaDetectado }}</span>
+            </div>
+
         </div>
 
     </div>
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
-        const { createApp } = Vue;
+        const { createApp, nextTick } = Vue;
 
         createApp({
             data() {
@@ -120,23 +194,63 @@
                     velocidad: 1.0,
                     voces: [],
                     vozSeleccionada: 0,
-                    idiomaDetectado: ''
+                    idiomaDetectado: '',
+
+                    // Estado de lectura
+                    parrafos: [],           // array de strings (párrafos)
+                    parrafoActual: 0,       // índice del párrafo que se está leyendo / resaltado
+                    estaLeyendo: false,     // true = hablando (speechSynthesis.speaking)
+                    estaPausado: false,     // true = pausado (speechSynthesis.paused)
+                    utteranceActual: null,  // referencia a la utterance en curso
                 };
             },
+            computed: {
+                hayTexto() {
+                    return this.parrafos.length > 0;
+                },
+                vozActualNombre() {
+                    const v = this.voces[this.vozSeleccionada];
+                    return v ? `${v.name} (${v.lang})` : '';
+                }
+            },
             mounted() {
+                // 1. Texto compartido desde la URL
                 const params = new URLSearchParams(window.location.search);
-                this.texto = params.get('text') || params.get('url') || params.get('title') || '';
+                const textoCompartido = params.get('text') || params.get('url') || params.get('title') || '';
+                if (textoCompartido) {
+                    this.establecerTexto(textoCompartido);
+                }
 
+                // 2. Cargar voces
                 this.cargarVoces();
                 if (typeof speechSynthesis !== 'undefined') {
                     speechSynthesis.onvoiceschanged = this.cargarVoces;
                 }
 
+                // 3. Configurar Media Session para controles del coche / bluetooth
+                this.configurarMediaSession();
+
+                // 4. Registrar Service Worker
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('sw.js').catch(err => console.log('SW:', err));
                 }
             },
             methods: {
+                // ========== TEXTO Y PÁRRAFOS ==========
+                establecerTexto(t) {
+                    this.texto = t;
+                    // Dividir en párrafos por doble salto de línea o saltos simples
+                    this.parrafos = t.split(/\n\s*\n|\n/).filter(p => p.trim().length > 0);
+                    if (this.parrafos.length === 0 && t.trim()) {
+                        this.parrafos = [t.trim()];
+                    }
+                    this.parrafoActual = 0;
+                },
+                usarTextoManual() {
+                    this.establecerTexto(this.textoManual.trim());
+                },
+
+                // ========== VOCES ==========
                 cargarVoces() {
                     const todas = speechSynthesis.getVoices();
                     if (!todas.length) return;
@@ -144,163 +258,211 @@
                     const idxEs = todas.findIndex(v => v.lang.toLowerCase().startsWith('es'));
                     if (idxEs !== -1) this.vozSeleccionada = idxEs;
                 },
-                usarTextoManual() {
-                    this.texto = this.textoManual;
+                ciclarVoz() {
+                    if (!this.voces.length) return;
+                    this.vozSeleccionada = (this.vozSeleccionada + 1) % this.voces.length;
                 },
-                cambiarVelocidad(cambio) {
-                    let nueva = this.velocidad + cambio;
-                    if (nueva < 0.5) nueva = 0.5;
-                    if (nueva > 2.0) nueva = 2.0;
-                    this.velocidad = Math.round(nueva * 100) / 100;
-                },
-                seleccionarVoz(index) {
-                    this.vozSeleccionada = index;
-                },
-                /**
-                 * Cambia a la siguiente voz disponible del idioma detectado.
-                 * - Detecta el idioma del texto con `SpeechSynthesisUtterance.lang`
-                 *   (el navegador hace la detección automática si no se especifica).
-                 * - Si no se detecta, usa el idioma del cliente (navigator.language).
-                 * - Salta a la SIGUIENTE voz de ese idioma (rotación entre voces).
-                 */
                 cambiarIdiomaAutomatico() {
                     if (!this.voces.length) return;
-
-                    // 1. Detectar idioma del texto
                     let idioma = this.detectarIdioma(this.texto);
-
-                    // 2. Si no se ha detectado, usar idioma del cliente
                     if (!idioma) {
                         idioma = (navigator.language || 'es').split('-')[0].toLowerCase();
                     }
                     this.idiomaDetectado = idioma;
-
-                    // 3. Buscar todas las voces que coincidan con ese idioma
                     const coincidencias = [];
                     this.voces.forEach((v, i) => {
-                        const langVoz = v.lang.toLowerCase().split('-')[0];
-                        if (langVoz === idioma) coincidencias.push(i);
+                        if (v.lang.toLowerCase().split('-')[0] === idioma) coincidencias.push(i);
                     });
-
-                    // 4. Si no hay voces para ese idioma, avisar
-                    if (coincidencias.length === 0) {
-                        console.warn('No hay voces para el idioma:', idioma);
-                        // Fallback: buscar cualquier voz que contenga el idioma
-                        const alt = this.voces.findIndex(v => v.lang.toLowerCase().includes(idioma));
-                        if (alt !== -1) {
-                            this.vozSeleccionada = alt;
-                        }
-                        return;
-                    }
-
-                    // 5. Rotar a la SIGUIENTE voz de ese idioma
+                    if (coincidencias.length === 0) return;
                     const posActual = coincidencias.indexOf(this.vozSeleccionada);
-                    let siguientePos;
-                    if (posActual === -1) {
-                        // No estábamos en ese idioma: ir a la primera
-                        siguientePos = 0;
-                    } else {
-                        // Estábamos en ese idioma: rotar
-                        siguientePos = (posActual + 1) % coincidencias.length;
-                    }
+                    const siguientePos = posActual === -1 ? 0 : (posActual + 1) % coincidencias.length;
                     this.vozSeleccionada = coincidencias[siguientePos];
                 },
-
-                /**
-                 * Detección de idioma simple por frecuencias de caracteres.
-                 * Devuelve el código ISO 639-1 (ej: "es", "en", "fr") o "" si no detecta.
-                 */
                 detectarIdioma(texto) {
                     if (!texto || texto.trim().length < 4) return '';
-
-                    // Heurística 1: caracteres específicos por idioma
                     const tiene = (regex) => regex.test(texto);
-
-                    // Cirílico → ruso
                     if (tiene(/[\u0400-\u04FF]/)) return 'ru';
-                    // Griego
                     if (tiene(/[\u0370-\u03FF]/)) return 'el';
-                    // Árabe
                     if (tiene(/[\u0600-\u06FF]/)) return 'ar';
-                    // Hebreo
-                    if (tiene(/[\u0590-\u05FF]/)) return 'he';
-                    // Chino
                     if (tiene(/[\u4E00-\u9FFF]/)) return 'zh';
-                    // Japonés (hiragana/katakana)
                     if (tiene(/[\u3040-\u30FF]/)) return 'ja';
-                    // Coreano
                     if (tiene(/[\uAC00-\uD7AF]/)) return 'ko';
-                    // Tailandés
-                    if (tiene(/[\u0E00-\u0E7F]/)) return 'th';
-
-                    // Heurística 2: caracteres especiales latinos
-                    // Español: ñ, ¿, ¡, á é í ó ú
                     if (tiene(/[ñ¿¡]/i)) return 'es';
-                    // Alemán: ß, ä, ö, ü
                     if (tiene(/[ß]/i)) return 'de';
-                    // Francés: ç, œ, à è ù
-                    if (tiene(/[çœàèù]/i)) return 'fr';
-                    // Portugués: ã, õ, ç
-                    if (tiene(/[ãõ]/i)) return 'pt';
-                    // Italiano: à è ì ò ù (comparte con otros, mejor no forzar)
-
-                    // Heurística 3: palabras muy comunes
+                    if (tiene(/[çœ]/i)) return 'fr';
                     const t = ' ' + texto.toLowerCase() + ' ';
-                    const puntuaciones = {
-                        es: 0, en: 0, fr: 0, de: 0, it: 0, pt: 0
+                    const palabras = {
+                        es: [' el ', ' la ', ' de ', ' que ', ' y ', ' los ', ' las ', ' con ', ' para ', ' por ', ' está ', ' pero '],
+                        en: [' the ', ' and ', ' of ', ' to ', ' is ', ' that ', ' it ', ' in ', ' you ', ' for ', ' this ', ' with '],
+                        fr: [' le ', ' la ', ' les ', ' de ', ' et ', ' est ', ' que ', ' des ', ' un ', ' une ', ' pour ', ' dans '],
+                        de: [' der ', ' die ', ' das ', ' und ', ' ist ', ' von ', ' zu ', ' mit ', ' ein ', ' eine ', ' für ', ' auf '],
+                        it: [' il ', ' la ', ' di ', ' che ', ' e ', ' un ', ' una ', ' per ', ' con ', ' non ', ' sono ', ' del '],
+                        pt: [' o ', ' a ', ' de ', ' que ', ' e ', ' os ', ' as ', ' um ', ' uma ', ' para ', ' com ', ' não ']
                     };
-
-                    const palabrasClave = {
-                        es: [' el ', ' la ', ' de ', ' que ', ' y ', ' los ', ' las ', ' con ', ' para ', ' por ', ' está ', ' pero ', ' como ', ' más ', ' este ', ' esta '],
-                        en: [' the ', ' and ', ' of ', ' to ', ' is ', ' that ', ' it ', ' in ', ' you ', ' for ', ' this ', ' with ', ' are ', ' was ', ' be '],
-                        fr: [' le ', ' la ', ' les ', ' de ', ' et ', ' est ', ' que ', ' des ', ' un ', ' une ', ' pour ', ' dans ', ' avec ', ' ce ', ' sont '],
-                        de: [' der ', ' die ', ' das ', ' und ', ' ist ', ' von ', ' zu ', ' mit ', ' ein ', ' eine ', ' für ', ' auf ', ' nicht ', ' sind ', ' dem '],
-                        it: [' il ', ' la ', ' di ', ' che ', ' e ', ' un ', ' una ', ' per ', ' con ', ' non ', ' sono ', ' del ', ' della ', ' gli ', ' nel '],
-                        pt: [' o ', ' a ', ' de ', ' que ', ' e ', ' os ', ' as ', ' um ', ' uma ', ' para ', ' com ', ' não ', ' são ', ' do ', ' da ']
-                    };
-
-                    for (const [idioma, palabras] of Object.entries(palabrasClave)) {
-                        for (const p of palabras) {
-                            const ocurrencias = (t.split(p).length - 1);
-                            puntuaciones[idioma] += ocurrencias;
-                        }
+                    const punt = {};
+                    for (const [idi, lista] of Object.entries(palabras)) {
+                        punt[idi] = 0;
+                        for (const p of lista) punt[idi] += (t.split(p).length - 1);
                     }
-
-                    // Encontrar el máximo
-                    let mejorIdioma = '';
-                    let mejorPuntuacion = 0;
-                    for (const [idioma, pun] of Object.entries(puntuaciones)) {
-                        if (pun > mejorPuntuacion) {
-                            mejorPuntuacion = pun;
-                            mejorIdioma = idioma;
-                        }
+                    let mejor = '', max = 0;
+                    for (const [idi, p] of Object.entries(punt)) {
+                        if (p > max) { max = p; mejor = idi; }
                     }
-
-                    // Umbral mínimo: si no hay al menos 2 coincidencias, no confiar
-                    if (mejorPuntuacion >= 2) return mejorIdioma;
-
-                    return '';
+                    return max >= 2 ? mejor : '';
                 },
 
-                leer() {
-                    if (!this.texto) return;
+                // ========== LECTURA ==========
+                toggleLectura() {
+                    if (this.estaPausado) {
+                        // Reanudar
+                        speechSynthesis.resume();
+                        this.estaPausado = false;
+                        this.estaLeyendo = true;
+                        this.actualizarMediaSession('playing');
+                        return;
+                    }
+                    if (this.estaLeyendo) {
+                        // Pausar
+                        speechSynthesis.pause();
+                        this.estaPausado = true;
+                        this.estaLeyendo = false;
+                        this.actualizarMediaSession('paused');
+                        return;
+                    }
+                    // Iniciar desde el párrafo actual
+                    this.leerDesdeParrafo(this.parrafoActual);
+                },
+                leerDesdeParrafo(indice) {
+                    if (indice < 0 || indice >= this.parrafos.length) return;
                     speechSynthesis.cancel();
-
-                    const u = new SpeechSynthesisUtterance(this.texto);
+                    this.parrafoActual = indice;
+                    this.estaLeyendo = true;
+                    this.estaPausado = false;
+                    this.hablarParrafo(indice);
+                },
+                hablarParrafo(indice) {
+                    if (indice >= this.parrafos.length) {
+                        // Fin de la lectura
+                        this.estaLeyendo = false;
+                        this.estaPausado = false;
+                        this.actualizarMediaSession('none');
+                        return;
+                    }
+                    const texto = this.parrafos[indice];
+                    const u = new SpeechSynthesisUtterance(texto);
                     u.rate = this.velocidad;
-
                     if (this.voces[this.vozSeleccionada]) {
                         u.voice = this.voces[this.vozSeleccionada];
                         u.lang = u.voice.lang;
                     }
 
-                    u.onend = () => console.log('Lectura terminada');
-                    u.onerror = (e) => console.error('Error TTS:', e);
+                    u.onstart = () => {
+                        this.parrafoActual = indice;
+                        this.estaLeyendo = true;
+                        this.estaPausado = false;
+                        this.actualizarMediaSession('playing');
+                    };
 
+                    u.onend = () => {
+                        // Pasar automáticamente al siguiente párrafo
+                        // (solo si no se ha cancelado manualmente)
+                        if (this.estaLeyendo || this.estaPausado) {
+                            this.hablarParrafo(indice + 1);
+                        }
+                    };
+
+                    u.onerror = (e) => {
+                        if (e.error !== 'interrupted' && e.error !== 'canceled') {
+                            console.error('Error TTS:', e);
+                            this.estaLeyendo = false;
+                            this.estaPausado = false;
+                        }
+                    };
+
+                    this.utteranceActual = u;
                     speechSynthesis.speak(u);
                 },
-                parar() {
+                reiniciar() {
                     speechSynthesis.cancel();
+                    this.estaLeyendo = false;
+                    this.estaPausado = false;
+                    this.parrafoActual = 0;
+                    this.actualizarMediaSession('none');
+                },
+                saltarAParrafo(indice) {
+                    // Si ya está leyendo o pausado, saltar y continuar
+                    if (this.estaLeyendo || this.estaPausado) {
+                        this.leerDesdeParrafo(indice);
+                    } else {
+                        // Solo resaltar
+                        this.parrafoActual = indice;
+                    }
+                },
+
+                // ========== VELOCIDAD ==========
+                cambiarVelocidad(cambio) {
+                    let nueva = this.velocidad + cambio;
+                    if (nueva < 0.5) nueva = 0.5;
+                    if (nueva > 2.0) nueva = 2.0;
+                    this.velocidad = Math.round(nueva * 100) / 100;
+
+                    // Si está leyendo, reiniciar el párrafo actual con la nueva velocidad
+                    if (this.estaLeyendo && !this.estaPausado) {
+                        const idx = this.parrafoActual;
+                        speechSynthesis.cancel();
+                        // Pequeño delay para que el cancel se procese
+                        setTimeout(() => this.hablarParrafo(idx), 50);
+                    }
+                },
+
+                // ========== MEDIA SESSION (controles del coche / bluetooth) ==========
+                configurarMediaSession() {
+                    if (!('mediaSession' in navigator)) {
+                        console.log('Media Session API no disponible');
+                        return;
+                    }
+
+                    // Metadata básica (para mostrar en pantalla del coche)
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: 'Lector en Coche',
+                        artist: 'Text to Speech',
+                        album: ''
+                    });
+
+                    // Handler: Play / Pausa (toggle)
+                    navigator.mediaSession.setActionHandler('play', () => {
+                        if (this.estaPausado) {
+                            this.toggleLectura();
+                        } else if (!this.estaLeyendo) {
+                            this.leerDesdeParrafo(this.parrafoActual);
+                        }
+                    });
+
+                    navigator.mediaSession.setActionHandler('pause', () => {
+                        if (this.estaLeyendo) this.toggleLectura();
+                    });
+
+                    // Handler: Párrafo anterior
+                    navigator.mediaSession.setActionHandler('previoustrack', () => {
+                        const nuevo = Math.max(0, this.parrafoActual - 1);
+                        this.leerDesdeParrafo(nuevo);
+                    });
+
+                    // Handler: Párrafo siguiente
+                    navigator.mediaSession.setActionHandler('nexttrack', () => {
+                        const nuevo = Math.min(this.parrafos.length - 1, this.parrafoActual + 1);
+                        this.leerDesdeParrafo(nuevo);
+                    });
+
+                    // Handler: Stop (detener y volver al inicio)
+                    navigator.mediaSession.setActionHandler('stop', () => {
+                        this.reiniciar();
+                    });
+                },
+                actualizarMediaSession(estado) {
+                    if ('mediaSession' in navigator) {
+                        navigator.mediaSession.playbackState = estado;
+                    }
                 }
             }
         }).mount('#app');
