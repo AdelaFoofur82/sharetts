@@ -1,9 +1,10 @@
 // Service Worker mínimo para que la PWA sea instalable
-const CACHE = 'sharetts-v1';
+const CACHE = 'sharetts-v2';
 const ASSETS = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './icon.svg'
 ];
 
 self.addEventListener('install', (e) => {
