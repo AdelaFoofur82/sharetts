@@ -37,6 +37,8 @@
             line-height: 1.7;
             user-select: none;
             -webkit-user-select: none;
+            /* Margen superior e inferior para que el scroll al inicio quede limpio */
+            scroll-padding-top: 0.75rem;
         }
         .texto-scroll:empty::before {
             content: "Comparte un texto desde otra app o pégalo aquí abajo.";
@@ -99,6 +101,7 @@
         <!-- ===== ZONA DE TEXTO ===== -->
         <div class="texto-scroll" ref="textoScroll" v-if="hayTexto">
             <div v-for="(p, i) in parrafos" :key="i"
+                 :ref="el => setParrafoRef(el, i)"
                  :class="['parrafo', { activo: i === parrafoActual }]"
                  @click="saltarAParrafo(i)">
                 {{ p }}
@@ -184,7 +187,7 @@
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
-        const { createApp } = Vue;
+        const { createApp, nextTick, watch } = Vue;
 
         createApp({
             data() {
@@ -201,6 +204,8 @@
                     estaLeyendo: false,
                     estaPausado: false,
                     utteranceActual: null,
+
+                    refsParrafos: []   // referencias DOM a cada párrafo
                 };
             },
             computed: {
@@ -210,6 +215,12 @@
                 vozActualNombre() {
                     const v = this.voces[this.vozSeleccionada];
                     return v ? `${v.name} (${v.lang})` : '';
+                }
+            },
+            watch: {
+                // Cada vez que cambia el párrafo activo → scroll suave para ponerlo arriba
+                parrafoActual(nuevo) {
+                    this.scrollAlParrafo(nuevo);
                 }
             },
             mounted() {
@@ -231,6 +242,27 @@
                 }
             },
             methods: {
+                // ========== REFS Y SCROLL ==========
+                setParrafoRef(el, i) {
+                    if (el) this.refsParrafos[i] = el;
+                },
+                scrollAlParrafo(indice) {
+                    nextTick(() => {
+                        const el = this.refsParrafos[indice];
+                        if (!el) return;
+                        const contenedor = this.$refs.textoScroll;
+                        if (!contenedor) return;
+
+                        // Calculamos la posición del párrafo relativa al contenedor
+                        // y hacemos scroll para que quede arriba del todo.
+                        const offset = el.offsetTop - contenedor.offsetTop;
+                        contenedor.scrollTo({
+                            top: offset - 4,        // pequeño margen
+                            behavior: 'smooth'
+                        });
+                    });
+                },
+
                 // ========== TEXTO Y PÁRRAFOS ==========
                 establecerTexto(t) {
                     this.texto = t;
@@ -238,7 +270,9 @@
                     if (this.parrafos.length === 0 && t.trim()) {
                         this.parrafos = [t.trim()];
                     }
+                    this.refsParrafos = [];
                     this.parrafoActual = 0;
+                    nextTick(() => this.scrollAlParrafo(0));
                 },
                 usarTextoManual() {
                     this.establecerTexto(this.textoManual.trim());
@@ -347,7 +381,7 @@
                     }
 
                     u.onstart = () => {
-                        this.parrafoActual = indice;
+                        this.parrafoActual = indice;   // dispara el watcher → scroll
                         this.estaLeyendo = true;
                         this.estaPausado = false;
                         this.actualizarMediaSession('playing');
@@ -376,6 +410,10 @@
                     this.estaPausado = false;
                     this.parrafoActual = 0;
                     this.actualizarMediaSession('none');
+                    // scroll al inicio
+                    nextTick(() => {
+                        this.$refs.textoScroll?.scrollTo({ top: 0, behavior: 'smooth' });
+                    });
                 },
 
                 // ========== NAVEGACIÓN ENTRE PÁRRAFOS ==========
@@ -385,7 +423,7 @@
                     if (this.estaLeyendo || this.estaPausado) {
                         this.leerDesdeParrafo(nuevo);
                     } else {
-                        this.parrafoActual = nuevo;
+                        this.parrafoActual = nuevo;   // dispara scroll
                     }
                 },
                 parrafoSiguiente() {
@@ -433,33 +471,4 @@
                         if (this.estaPausado) {
                             this.toggleLectura();
                         } else if (!this.estaLeyendo) {
-                            this.leerDesdeParrafo(this.parrafoActual);
-                        }
-                    });
-
-                    navigator.mediaSession.setActionHandler('pause', () => {
-                        if (this.estaLeyendo) this.toggleLectura();
-                    });
-
-                    navigator.mediaSession.setActionHandler('previoustrack', () => {
-                        this.parrafoAnterior();
-                    });
-
-                    navigator.mediaSession.setActionHandler('nexttrack', () => {
-                        this.parrafoSiguiente();
-                    });
-
-                    navigator.mediaSession.setActionHandler('stop', () => {
-                        this.reiniciar();
-                    });
-                },
-                actualizarMediaSession(estado) {
-                    if ('mediaSession' in navigator) {
-                        navigator.mediaSession.playbackState = estado;
-                    }
-                }
-            }
-        }).mount('#app');
-    </script>
-</body>
-</html>
+                            this.leerDe
