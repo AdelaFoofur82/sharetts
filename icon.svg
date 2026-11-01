@@ -1,6 +1,60 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#121212"/>
-  <path d="M128 150h256a24 24 0 0 1 24 24v144a24 24 0 0 1-24 24H250l-82 62v-62h-40a24 24 0 0 1-24-24V174a24 24 0 0 1 24-24Z" fill="#198754"/>
-  <path d="m226 210 96 62-96 62z" fill="#fff"/>
-  <path d="M354 222c18 20 18 52 0 72m30-102c33 36 33 96 0 132" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="18"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="512"
+   height="512"
+   viewBox="0 0 512 512"
+   version="1.1"
+   id="svg3"
+   sodipodi:docname="icon.svg"
+   inkscape:version="1.3.2 (091e20e, 2023-11-25, custom)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs3" />
+  <sodipodi:namedview
+     id="namedview3"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.68945312"
+     inkscape:cx="256"
+     inkscape:cy="256"
+     inkscape:window-width="1600"
+     inkscape:window-height="1201"
+     inkscape:window-x="2391"
+     inkscape:window-y="-9"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g3" />
+  <rect
+     width="512"
+     height="512"
+     rx="112"
+     fill="#121212"
+     id="rect1" />
+  <path
+     d="M128 150h256a24 24 0 0 1 24 24v144a24 24 0 0 1-24 24H250l-82 62v-62h-40a24 24 0 0 1-24-24V174a24 24 0 0 1 24-24Z"
+     fill="#198754"
+     id="path1" />
+  <g
+     id="g3"
+     transform="translate(-8.9543826,30.090652)">
+    <path
+       d="M 226.49695,165.32581 303.41182,215 226.49695,264.67419 Z"
+       fill="#ffffff"
+       id="path2"
+       style="stroke-width:0.801197" />
+    <path
+       d="m 330.30868,186.15692 c 14.42154,16.02394 14.42154,41.66222 0,57.68616 m 24.0359,-81.72205 c 26.43949,28.84307 26.43949,76.91487 0,105.75794"
+       fill="none"
+       stroke="#ffffff"
+       stroke-linecap="round"
+       stroke-width="14.4215"
+       id="path3" />
+  </g>
 </svg>
