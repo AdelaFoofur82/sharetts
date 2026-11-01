@@ -37,7 +37,6 @@
             line-height: 1.7;
             user-select: none;
             -webkit-user-select: none;
-            /* Margen superior e inferior para que el scroll al inicio quede limpio */
             scroll-padding-top: 0.75rem;
         }
         .texto-scroll:empty::before {
@@ -101,7 +100,7 @@
         <!-- ===== ZONA DE TEXTO ===== -->
         <div class="texto-scroll" ref="textoScroll" v-if="hayTexto">
             <div v-for="(p, i) in parrafos" :key="i"
-                 :ref="el => setParrafoRef(el, i)"
+                 :id="'parrafo-' + i"
                  :class="['parrafo', { activo: i === parrafoActual }]"
                  @click="saltarAParrafo(i)">
                 {{ p }}
@@ -123,7 +122,6 @@
         <!-- ===== CONTROLES ===== -->
         <div class="controles d-grid gap-2" v-if="hayTexto">
 
-            <!-- Fila 1: ATRÁS | PAUSA/REANUDAR | ADELANTE -->
             <div class="row g-2">
                 <div class="col-3">
                     <button @click="parrafoAnterior" class="btn btn-secondary btn-control w-100"
@@ -148,20 +146,17 @@
                 </div>
             </div>
 
-            <!-- Fila 2: REINICIAR -->
             <button @click="reiniciar" class="btn btn-danger btn-control-sm w-100 py-2"
                     :disabled="!hayTexto">
                 🔄 REINICIAR
             </button>
 
-            <!-- Fila 3: VELOCIDAD -->
             <div class="d-flex gap-2 align-items-stretch">
                 <button @click="cambiarVelocidad(-0.25)" class="btn btn-outline-light btn-control-sm flex-fill">−</button>
                 <div class="velocidad-display flex-fill">{{ velocidad.toFixed(2) }}×</div>
                 <button @click="cambiarVelocidad(0.25)" class="btn btn-outline-light btn-control-sm flex-fill">+</button>
             </div>
 
-            <!-- Fila 4: CAMBIO DE VOZ + IDIOMA -->
             <div class="row g-2">
                 <div class="col-7">
                     <button @click="ciclarVoz" class="btn btn-info btn-control-sm w-100 py-3">
@@ -175,7 +170,6 @@
                 </div>
             </div>
 
-            <!-- Info de voz actual + idioma detectado -->
             <div class="text-center small text-muted">
                 <span v-if="vozActualNombre">{{ vozActualNombre }}</span>
                 <span v-if="idiomaDetectado" class="badge bg-info text-dark ms-1">{{ idiomaDetectado }}</span>
@@ -187,7 +181,7 @@
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
-        const { createApp, nextTick, watch } = Vue;
+        const { createApp, nextTick } = Vue;
 
         createApp({
             data() {
@@ -204,8 +198,6 @@
                     estaLeyendo: false,
                     estaPausado: false,
                     utteranceActual: null,
-
-                    refsParrafos: []   // referencias DOM a cada párrafo
                 };
             },
             computed: {
@@ -215,12 +207,6 @@
                 vozActualNombre() {
                     const v = this.voces[this.vozSeleccionada];
                     return v ? `${v.name} (${v.lang})` : '';
-                }
-            },
-            watch: {
-                // Cada vez que cambia el párrafo activo → scroll suave para ponerlo arriba
-                parrafoActual(nuevo) {
-                    this.scrollAlParrafo(nuevo);
                 }
             },
             mounted() {
@@ -242,25 +228,32 @@
                 }
             },
             methods: {
-                // ========== REFS Y SCROLL ==========
-                setParrafoRef(el, i) {
-                    if (el) this.refsParrafos[i] = el;
-                },
+                // ========== SCROLL ==========
+                /**
+                 * Hace scroll para que el párrafo `indice` quede arriba del todo
+                 * dentro del contenedor `.texto-scroll`.
+                 */
                 scrollAlParrafo(indice) {
-                    nextTick(() => {
-                        const el = this.refsParrafos[indice];
-                        if (!el) return;
+                    // Usamos requestAnimationFrame para esperar a que el DOM
+                    // haya aplicado la clase .activo y el layout esté calculado.
+                    requestAnimationFrame(() => {
                         const contenedor = this.$refs.textoScroll;
                         if (!contenedor) return;
+                        const el = document.getElementById('parrafo-' + indice);
+                        if (!el) return;
 
-                        // Calculamos la posición del párrafo relativa al contenedor
-                        // y hacemos scroll para que quede arriba del todo.
-                        const offset = el.offsetTop - contenedor.offsetTop;
+                        // Posición del párrafo relativa al contenedor
+                        const top = el.offsetTop - contenedor.offsetTop - 8;
                         contenedor.scrollTo({
-                            top: offset - 4,        // pequeño margen
+                            top: Math.max(0, top),
                             behavior: 'smooth'
                         });
                     });
+                },
+                /** Cambia el párrafo activo y hace scroll. Punto único de cambio. */
+                setParrafo(indice) {
+                    this.parrafoActual = indice;
+                    this.scrollAlParrafo(indice);
                 },
 
                 // ========== TEXTO Y PÁRRAFOS ==========
@@ -270,8 +263,8 @@
                     if (this.parrafos.length === 0 && t.trim()) {
                         this.parrafos = [t.trim()];
                     }
-                    this.refsParrafos = [];
                     this.parrafoActual = 0;
+                    // Esperar a que Vue pinte los párrafos antes de hacer scroll
                     nextTick(() => this.scrollAlParrafo(0));
                 },
                 usarTextoManual() {
@@ -360,9 +353,9 @@
                 leerDesdeParrafo(indice) {
                     if (indice < 0 || indice >= this.parrafos.length) return;
                     speechSynthesis.cancel();
-                    this.parrafoActual = indice;
                     this.estaLeyendo = true;
                     this.estaPausado = false;
+                    this.setParrafo(indice);
                     this.hablarParrafo(indice);
                 },
                 hablarParrafo(indice) {
@@ -381,7 +374,7 @@
                     }
 
                     u.onstart = () => {
-                        this.parrafoActual = indice;   // dispara el watcher → scroll
+                        this.setParrafo(indice);   // resalta + scroll
                         this.estaLeyendo = true;
                         this.estaPausado = false;
                         this.actualizarMediaSession('playing');
@@ -408,12 +401,8 @@
                     speechSynthesis.cancel();
                     this.estaLeyendo = false;
                     this.estaPausado = false;
-                    this.parrafoActual = 0;
+                    this.setParrafo(0);
                     this.actualizarMediaSession('none');
-                    // scroll al inicio
-                    nextTick(() => {
-                        this.$refs.textoScroll?.scrollTo({ top: 0, behavior: 'smooth' });
-                    });
                 },
 
                 // ========== NAVEGACIÓN ENTRE PÁRRAFOS ==========
@@ -423,7 +412,7 @@
                     if (this.estaLeyendo || this.estaPausado) {
                         this.leerDesdeParrafo(nuevo);
                     } else {
-                        this.parrafoActual = nuevo;   // dispara scroll
+                        this.setParrafo(nuevo);
                     }
                 },
                 parrafoSiguiente() {
@@ -432,14 +421,14 @@
                     if (this.estaLeyendo || this.estaPausado) {
                         this.leerDesdeParrafo(nuevo);
                     } else {
-                        this.parrafoActual = nuevo;
+                        this.setParrafo(nuevo);
                     }
                 },
                 saltarAParrafo(indice) {
                     if (this.estaLeyendo || this.estaPausado) {
                         this.leerDesdeParrafo(indice);
                     } else {
-                        this.parrafoActual = indice;
+                        this.setParrafo(indice);
                     }
                 },
 
@@ -471,4 +460,33 @@
                         if (this.estaPausado) {
                             this.toggleLectura();
                         } else if (!this.estaLeyendo) {
-                            this.leerDe
+                            this.leerDesdeParrafo(this.parrafoActual);
+                        }
+                    });
+
+                    navigator.mediaSession.setActionHandler('pause', () => {
+                        if (this.estaLeyendo) this.toggleLectura();
+                    });
+
+                    navigator.mediaSession.setActionHandler('previoustrack', () => {
+                        this.parrafoAnterior();
+                    });
+
+                    navigator.mediaSession.setActionHandler('nexttrack', () => {
+                        this.parrafoSiguiente();
+                    });
+
+                    navigator.mediaSession.setActionHandler('stop', () => {
+                        this.reiniciar();
+                    });
+                },
+                actualizarMediaSession(estado) {
+                    if ('mediaSession' in navigator) {
+                        navigator.mediaSession.playbackState = estado;
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
